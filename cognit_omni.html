@@ -1,0 +1,297 @@
+<meta name="description" content="COGNIT // OMNI_PRESENCE: A real-time bio-digital physics simulation. Transmute your video and audio into a digital particle field.">
+<meta name="keywords" content="generative art, physics simulation, optical flow, javascript, web audio api, creative coding">
+<meta name="author" content="Your Name">
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>COGNIT // OMNI_PRESENCE</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #000; font-family: 'Courier New', monospace; }
+        canvas { display: block; transform: scaleX(-1); /* Mirror effect */ }
+        
+        #ui {
+            position: absolute;
+            top: 20px;
+            left: 20px; /* Actually right because of mirror flip */
+            color: #0f0;
+            z-index: 10;
+            pointer-events: none;
+            text-shadow: 0 0 5px #0f0;
+            transform: scaleX(-1); /* Un-flip text */
+        }
+        
+        h1 { margin: 0; font-size: 20px; letter-spacing: 5px; color: #fff; text-shadow: 0 0 10px #fff; }
+        .stat { font-size: 12px; margin-top: 5px; opacity: 0.8; }
+        
+        #start-btn {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            padding: 20px 40px;
+            font-size: 24px;
+            background: transparent;
+            color: #0f0;
+            border: 2px solid #0f0;
+            cursor: pointer;
+            z-index: 100;
+            box-shadow: 0 0 30px #0f0;
+            font-family: inherit;
+            letter-spacing: 5px;
+            transition: 0.2s;
+        }
+        #start-btn:hover { background: #0f0; color: #000; box-shadow: 0 0 60px #0f0; }
+
+        .glitch { animation: glitch 0.2s infinite; }
+        @keyframes glitch {
+            0% { transform: translate(0); }
+            20% { transform: translate(-2px, 2px); }
+            40% { transform: translate(-2px, -2px); }
+            60% { transform: translate(2px, 2px); }
+            80% { transform: translate(2px, -2px); }
+            100% { transform: translate(0); }
+        }
+    </style>
+</head>
+<body>
+
+<button id="start-btn">IGNITE GOD MODE</button>
+
+<div id="ui">
+    <h1>OMNI // PRESENCE</h1>
+    <div class="stat">OPTICAL FLOW: <span id="flow-val">0</span>%</div>
+    <div class="stat">SONIC PRESSURE: <span id="audio-val">0</span>dB</div>
+    <div class="stat">REALITY STATE: <span id="state-val">STABLE</span></div>
+</div>
+
+<video id="video" style="display:none" autoplay playsinline></video>
+<canvas id="canvas"></canvas>
+
+<script>
+    /**
+     * THE QUANTUM MIRROR
+     * Integrates WebCam (Optical Flow) + Mic (FFT) -> Particle Physics
+     */
+    
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d', { alpha: false }); // Optimize
+    const video = document.getElementById('video');
+    const startBtn = document.getElementById('start-btn');
+
+    let width, height;
+    // Lower resolution for performance (Matrix style)
+    const DENSITY = 12; // Pixel step (Lower = More particles = Lag)
+    
+    // SYSTEMS
+    let particles = [];
+    let audioCtx, analyser, dataArray;
+    let isRunning = false;
+    
+    // RESIZE
+    function resize() {
+        width = canvas.width = window.innerWidth;
+        height = canvas.height = window.innerHeight;
+    }
+    resize();
+    window.addEventListener('resize', resize);
+
+    // INIT
+    startBtn.addEventListener('click', async () => {
+        try {
+            // 1. AUDIO INIT
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            analyser = audioCtx.createAnalyser();
+            analyser.fftSize = 256;
+            
+            // 2. VIDEO INIT
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { width: 640, height: 480 }, // Low res for processing speed
+                audio: true 
+            });
+            
+            video.srcObject = stream;
+            video.play();
+            
+            const audioSource = audioCtx.createMediaStreamSource(stream);
+            audioSource.connect(analyser);
+            dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+            startBtn.style.display = 'none';
+            isRunning = true;
+            initParticles();
+            loop();
+
+        } catch (err) {
+            alert("ACCESS DENIED. GOD MODE REQUIRES SENSES (CAM/MIC).");
+            console.error(err);
+        }
+    });
+
+    // PARTICLE ENGINE
+    class Particle {
+        constructor(x, y) {
+            this.ox = x; // Origin X
+            this.oy = y; // Origin Y
+            this.x = x;
+            this.y = y;
+            this.vx = 0;
+            this.vy = 0;
+            this.color = '#0f0';
+            this.size = 2;
+            this.mass = Math.random() * 0.5 + 0.5;
+        }
+
+        update(brightness, motionX, motionY, audioLevel) {
+            // PHYSICS 1: RETURN TO ORIGIN (Elasticity)
+            // The "Matrix" tries to hold your shape
+            const dx = this.ox - this.x;
+            const dy = this.oy - this.y;
+            this.vx += dx * 0.05; // Spring force
+            this.vy += dy * 0.05;
+
+            // PHYSICS 2: OPTICAL FLOW (Your movement pushes particles)
+            // If there is motion at this pixel, explode
+            this.vx += motionX * 5; 
+            this.vy += motionY * 5;
+
+            // PHYSICS 3: AUDIO SHOCKWAVE (Your voice explodes reality)
+            // If loud, push everything away from center
+            if (audioLevel > 50) {
+                const cdx = this.x - width/2;
+                const cdy = this.y - height/2;
+                const dist = Math.sqrt(cdx*cdx + cdy*cdy);
+                const force = (audioLevel * 2) / (dist + 1);
+                this.vx += (cdx/dist) * force;
+                this.vy += (cdy/dist) * force;
+                
+                this.color = `rgb(255, ${255 - audioLevel * 2}, ${255 - audioLevel * 2})`; // Turn Red
+            } else {
+                // Color based on brightness (Greenscale matrix)
+                const g = brightness;
+                this.color = `rgb(0, ${g}, ${g*0.5})`;
+            }
+
+            // Damping (Friction)
+            this.vx *= 0.85;
+            this.vy *= 0.85;
+
+            // Apply Velocity
+            this.x += this.vx;
+            this.y += this.vy;
+            
+            // Size based on brightness
+            this.size = (brightness / 255) * DENSITY * 0.8;
+        }
+
+        draw() {
+            if (this.size < 1) return;
+            ctx.fillStyle = this.color;
+            ctx.fillRect(this.x, this.y, this.size, this.size);
+        }
+    }
+
+    function initParticles() {
+        particles = [];
+        // Create a grid of particles covering the screen
+        for (let y = 0; y < height; y += DENSITY) {
+            for (let x = 0; x < width; x += DENSITY) {
+                particles.push(new Particle(x, y));
+            }
+        }
+    }
+
+    // PROCESSING BUFFERS
+    const hiddenCanvas = document.createElement('canvas');
+    const hCtx = hiddenCanvas.getContext('2d', { willReadFrequently: true });
+    
+    let prevPixels = null;
+
+    function loop() {
+        if (!isRunning) return;
+
+        // 1. AUDIO ANALYSIS
+        analyser.getByteFrequencyData(dataArray);
+        let avgAudio = 0;
+        for(let a of dataArray) avgAudio += a;
+        avgAudio /= dataArray.length; // 0 to 255
+
+        // UI Update
+        document.getElementById('audio-val').innerText = Math.floor(avgAudio);
+        if (avgAudio > 80) {
+            document.getElementById('state-val').innerText = "CRITICAL_SURGE";
+            document.getElementById('state-val').style.color = "red";
+            document.body.classList.add('glitch');
+        } else {
+            document.getElementById('state-val').innerText = "STABLE";
+            document.getElementById('state-val').style.color = "#0f0";
+            document.body.classList.remove('glitch');
+        }
+
+        // 2. VIDEO PROCESSING
+        // Draw video to hidden canvas to read pixels
+        // We scale video to fit screen
+        if (video.videoWidth > 0) {
+            hiddenCanvas.width = width;
+            hiddenCanvas.height = height;
+            hCtx.drawImage(video, 0, 0, width, height);
+            
+            const frame = hCtx.getImageData(0, 0, width, height);
+            const pixels = frame.data;
+            
+            // Motion Detection Logic
+            let motionTotal = 0;
+
+            // Map particles to pixels
+            let pIndex = 0;
+            for (let y = 0; y < height; y += DENSITY) {
+                for (let x = 0; x < width; x += DENSITY) {
+                    if (pIndex >= particles.length) break;
+                    
+                    const pixelIndex = (y * width + x) * 4;
+                    const r = pixels[pixelIndex];
+                    const g = pixels[pixelIndex+1];
+                    const b = pixels[pixelIndex+2];
+                    const brightness = (r + g + b) / 3;
+
+                    // Calculate Motion (Diff from last frame)
+                    let motionX = 0;
+                    let motionY = 0;
+                    
+                    if (prevPixels) {
+                        const pr = prevPixels[pixelIndex];
+                        const pg = prevPixels[pixelIndex+1];
+                        const pb = prevPixels[pixelIndex+2];
+                        const diff = Math.abs(r - pr) + Math.abs(g - pg) + Math.abs(b - pb);
+                        
+                        if (diff > 50) { // Threshold for movement
+                            motionTotal += diff;
+                            // Random jitter direction for motion energy
+                            motionX = (Math.random() - 0.5) * (diff / 20);
+                            motionY = (Math.random() - 0.5) * (diff / 20);
+                        }
+                    }
+
+                    // UPDATE PARTICLE
+                    particles[pIndex].update(brightness, motionX, motionY, avgAudio);
+                    pIndex++;
+                }
+            }
+            
+            // Save current frame for next comparison
+            prevPixels = pixels; 
+            document.getElementById('flow-val').innerText = Math.floor(motionTotal / 1000);
+        }
+
+        // 3. RENDER
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.3)'; // Trails
+        ctx.fillRect(0, 0, width, height);
+
+        particles.forEach(p => p.draw());
+
+        requestAnimationFrame(loop);
+    }
+</script>
+</body>
+</html>
